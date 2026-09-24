@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>QuickChat - Private Chat & Calls</title>
+    <!-- Socket.io & PeerJS -->
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            height: 100dvh;
+            background: #090d16;
+            color: #fff;
+            overflow: hidden;
+            position: fixed;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .chat-container {
+            width: 100%;
+            max-width: 360px; /* यूजर बॉक्स और चैट बॉक्स दोनों का फिक्स साइज */
+            height: 100dvh;
+            max-height: 640px; /* फिक्स हाइट */
+            display: flex;
+            flex-direction: column;
+            background: #0f172a;
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* JOIN SCREEN */
+        .join-screen {
+            width: 100%;
+            height: 100%;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+        }
+
+        .app-logo { font-size: 42px; margin-bottom: 6px; }
+
+        .join-screen h2 {
+            font-size: 22px;
+            font-weight: 800;
+            background: linear-gradient(to right, #a78bfa, #f472b6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 4px;
+        }
+
+        .join-screen p { color: #94a3b8; font-size: 13px; margin-bottom: 20px; }
+
+        .input-box {
+            width: 100%;
+            height: 46px;
+            padding: 0 14px;
+            background: rgba(2, 6, 23, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            color: #fff;
+            font-size: 16px;
+            outline: none;
+            text-align: center;
+            margin-bottom: 12px;
+        }
+
+        .btn-whatsapp {
+            width: 100%;
+            height: 46px;
+            background: #25D366;
+            border: none;
+            border-radius: 10px;
+            color: white;
+            font-weight: 700;
+            font-size: 15px;
+            cursor: pointer;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            width: 100%;
+            height: 46px;
+            background: linear-gradient(135deg, #8b5cf6, #ec4899);
+            border: none;
+            border-radius: 10px;
+            color: white;
+            font-weight: 700;
+            font-size: 15px;
+            cursor: pointer;
+        }
+
+        /* CHAT SCREEN (अब यह भी 360px बॉक्स में फिक्स है) */
+        .chat-screen {
+            display: none;
+            flex-direction: column;
+            height: 100%;
+            width: 100%;
+            background: #090d16;
+        }
+
+        .chat-header {
+            height: 54px;
+            padding: 0 12px;
+            background: #020617;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
+        }
+
+        .user-info h3 { font-size: 14px; color: #f8fafc; }
+        .user-info p { font-size: 10px; color: #22c55e; font-weight: bold; }
+
+        .header-actions { display: flex; gap: 4px; }
+
+        .icon-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: #fff;
+            padding: 6px 8px;
+            border-radius: 8px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+
+        .chat-messages {
+            flex: 1;
+            padding: 12px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            background: #090d16;
+        }
+
+        .msg {
+            max-width: 80%;
+            padding: 8px 12px;
+            border-radius: 12px;
+            font-size: 14px;
+            line-height: 1.4;
+            word-break: break-word;
+        }
+
+        .msg-incoming {
+            background: rgba(255, 255, 255, 0.12);
+            align-self: flex-start;
+        }
+
+        .msg-outgoing {
+            background: #7c3aed;
+            align-self: flex-end;
+        }
+
+        .msg-author {
+            font-size: 10px;
+            opacity: 0.7;
+            margin-bottom: 2px;
+            font-weight: bold;
+        }
+
+        .msg-media {
+            max-width: 100%;
+            border-radius: 8px;
+            margin-top: 4px;
+        }
+
+        .chat-input-area {
+            height: 54px;
+            padding: 6px 10px;
+            background: #020617;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-shrink: 0;
+        }
+
+        .chat-input-area input[type="text"] {
+            flex: 1;
+            height: 38px;
+            padding: 0 10px;
+            background: #0f172a;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 8px;
+            color: white;
+            outline: none;
+            font-size: 16px; 
+        }
+
+        .send-btn {
+            height: 38px;
+            background: #8b5cf6;
+            border: none;
+            color: white;
+            padding: 0 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 13px;
+        }
+
+        /* CALL MODAL */
+        .call-modal {
+            display: none;
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: #0f172a;
+            z-index: 200;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-between;
+            padding: 20px;
+        }
+
+        .video-grid {
+            width: 100%;
+            height: 80%;
+            position: relative;
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        #remoteVideo { width: 100%; height: 100%; object-fit: cover; }
+        #localVideo {
+            width: 80px;
+            height: 110px;
+            position: absolute;
+            bottom: 10px; right: 10px;
+            border-radius: 8px;
+            border: 2px solid #fff;
+            object-fit: cover;
+            background: #000;
+        }
+
+        .end-call-btn {
+            background: #ef4444;
+            border: none;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 30px;
+            font-weight: bold;
+            font-size: 13px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="chat-container">
+        <!-- JOIN SCREEN -->
+        <div class="join-screen" id="joinScreen">
+            <div class="app-logo">⚡</div>
+            <h2>QuickChat</h2>
+            <p>Private Anonymous Chat & Calls</p>
+
+            <input type="text" id="usernameInput" class="input-box" placeholder="Enter Your Name...">
+
+            <button class="btn-whatsapp" onclick="shareOnWhatsApp()">Share Link on WhatsApp 💬</button>
+            <button class="btn-primary" onclick="startDirectChat()">Start Chatting 🚀</button>
+        </div>
+
+        <!-- CHAT SCREEN -->
+        <div class="chat-screen" id="chatScreen">
+            <div class="chat-header">
+                <div class="user-info">
+                    <h3 id="displayUsername">User</h3>
+                    <p id="displayRoomInfo">🟢 Connected</p>
+                </div>
+                <div class="header-actions">
+                    <button class="icon-btn" onclick="shareOnWhatsApp()">💬 Invite</button>
+                    <button class="icon-btn" onclick="startCall('audio')">📞</button>
+                    <button class="icon-btn" onclick="startCall('video')">📹</button>
+                </div>
+            </div>
+
+            <div class="chat-messages" id="messagesBox"></div>
+
+            <div class="chat-input-area">
+                <input type="file" id="mediaInput" accept="image/*,video/*" style="display: none;" onchange="handleMediaUpload(event)">
+                <button class="icon-btn" onclick="document.getElementById('mediaInput').click()">📎</button>
+                <input type="text" id="messageInput" placeholder="Type a message..." onkeypress="handleKeyPress(event)">
+                <button class="send-btn" onclick="sendMessage()">Send</button>
+            </div>
+        </div>
+
+        <!-- CALL MODAL -->
+        <div class="call-modal" id="callModal">
+            <h3 id="callStatusTitle">Calling...</h3>
+            <div class="video-grid">
+                <video id="remoteVideo" autoplay playsinline></video>
+                <video id="localVideo" autoplay playsinline muted></video>
+            </div>
+            <button class="end-call-btn" onclick="endCall()">End Call 📵</button>
+        </div>
+    </div>
+
+    <script>
+        const socket = io(window.location.origin); 
+
+        let username = "";
+        let roomId = "";
+        let peer = null;
+        let localStream = null;
+        let currentCall = null;
+
+        const urlParams = new URLSearchParams(window.location.search);
+        let linkRoomId = urlParams.get('room');
+
+        if (linkRoomId) {
+            roomId = linkRoomId;
+        } else {
+            roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
+        }
+
+        function shareOnWhatsApp() {
+            const nameInput = document.getElementById('usernameInput').value.trim();
+            if (!nameInput && !username) {
+                alert("Please enter your name first!");
+                return;
+            }
+
+            if (!username) username = nameInput;
+
+            const inviteLink = `${window.location.origin}${window.location.pathname}?room=${roomId}`;
+            const message = `Hey! Join my private chat and video call room on QuickChat ⚡\n\nClick to join: ${inviteLink}`;
+
+            const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`;
+            window.open(whatsappUrl, '_blank');
+
+            if (document.getElementById('joinScreen').style.display !== 'none') {
+                initChatSession();
+            }
+        }
+
+        function startDirectChat() {
+            const nameInput = document.getElementById('usernameInput').value.trim();
+            if (!nameInput) {
+                alert("Please enter your name!");
+                return;
+            }
+            username = nameInput;
+            initChatSession();
+        }
+
+        function initChatSession() {
+            document.getElementById('displayUsername').innerText = username;
+            document.getElementById('joinScreen').style.display = 'none';
+            document.getElementById('chatScreen').style.display = 'flex';
+
+            peer = new Peer();
+
+            peer.on('open', (id) => {
+                socket.emit('join-room', { username, roomId, peerId: id });
+            });
+
+            peer.on('call', async (call) => {
+                const answerCall = confirm("Incoming Call! Do you want to accept?");
+                if (answerCall) {
+                    currentCall = call;
+                    document.getElementById('callModal').style.display = 'flex';
+                    document.getElementById('callStatusTitle').innerText = "In Call";
+
+                    localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                    document.getElementById('localVideo').srcObject = localStream;
+
+                    call.answer(localStream);
+                    call.on('stream', (remoteStream) => {
+                        document.getElementById('remoteVideo').srcObject = remoteStream;
+                    });
+                }
+            });
+        }
+
+        let targetPeerId = null;
+        socket.on('user-connected', (peerId) => {
+            targetPeerId = peerId;
+            document.getElementById('displayRoomInfo').innerText = "🟢 User Joined!";
+        });
+
+        async function startCall(type) {
+            if (!targetPeerId) {
+                alert("Wait for your friend to click the WhatsApp link and join the room!");
+                return;
+            }
+
+            try {
+                const constraints = type === 'video' ? { video: true, audio: true } : { video: false, audio: true };
+                localStream = await navigator.mediaDevices.getUserMedia(constraints);
+                
+                document.getElementById('localVideo').srcObject = localStream;
+                document.getElementById('callModal').style.display = 'flex';
+                document.getElementById('callStatusTitle').innerText = type === 'video' ? "Video Calling..." : "Voice Calling...";
+
+                const call = peer.call(targetPeerId, localStream);
+                currentCall = call;
+
+                call.on('stream', (remoteStream) => {
+                    document.getElementById('remoteVideo').srcObject = remoteStream;
+                    document.getElementById('callStatusTitle').innerText = "Connected";
+                });
+            } catch (err) {
+                alert("Camera/Microphone permission required.");
+                console.error(err);
+            }
+        }
+
+        function endCall() {
+            if (currentCall) currentCall.close();
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+            }
+            document.getElementById('callModal').style.display = 'none';
+        }
+
+        socket.on('receive-message', (data) => {
+            appendMessage(data.username, data.message, data.mediaType, data.mediaData, data.username === username ? 'outgoing' : 'incoming');
+        });
+
+        function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+
+            if (message) {
+                socket.emit('send-message', { roomId, username, message, mediaType: 'text', mediaData: null });
+                input.value = '';
+            }
+        }
+
+        function handleMediaUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            const mediaType = file.type.startsWith('image/') ? 'image' : (file.type.startsWith('video/') ? 'video' : null);
+
+            if (!mediaType) {
+                alert('Please select an image or video!');
+                return;
+            }
+
+            reader.onload = function(e) {
+                socket.emit('send-message', { roomId, username, message: '', mediaType: mediaType, mediaData: e.target.result });
+            };
+
+            reader.readAsDataURL(file);
+            event.target.value = '';
+        }
+
+        function handleKeyPress(e) {
+            if (e.key === 'Enter') sendMessage();
+        }
+
+        function appendMessage(sender, text, mediaType, mediaData, type) {
+            const box = document.getElementById('messagesBox');
+            const msgDiv = document.createElement('div');
+            msgDiv.classList.add('msg', type === 'outgoing' ? 'msg-outgoing' : 'msg-incoming');
+
+            let contentHTML = type === 'incoming' ? `<div class="msg-author">${sender}</div>` : '';
+
+            if (mediaType === 'image') {
+                contentHTML += `<img src="${mediaData}" class="msg-media" />`;
+            } else if (mediaType === 'video') {
+                contentHTML += `<video src="${mediaData}" class="msg-media" controls></video>`;
+            } else if (text) {
+                contentHTML += text;
+            }
+
+            msgDiv.innerHTML = contentHTML;
+            box.appendChild(msgDiv);
+            box.scrollTop = box.scrollHeight;
+        }
+    </script>
+</body>
+</html>
